@@ -23,9 +23,8 @@ export async function initDB() {
   if (!db) {
     try {
       // Create a new PGlite instance with in-memory mode
-      // This is crucial for Vercel deployment
+      // Use the object syntax for better compatibility
       db = new PGlite({
-        // Use in-memory mode for Vercel
         filename: ":memory:",
       })
 
@@ -52,8 +51,53 @@ export async function initDB() {
 
       console.log("Patients table created successfully")
 
-      // Add sample data (since we're in memory mode, we'll always need sample data)
-      await addSampleData()
+      // Check if we have data in localStorage first
+      if (typeof window !== "undefined") {
+        const storedPatients = localStorage.getItem("patients")
+        if (storedPatients) {
+          try {
+            const patients = JSON.parse(storedPatients)
+            if (Array.isArray(patients) && patients.length > 0) {
+              console.log("Loading patients from localStorage:", patients.length)
+
+              // Insert stored patients into the database directly (not using addPatient to avoid circular calls)
+              for (const patient of patients) {
+                await db.query(
+                  `INSERT INTO patients (id, name, age, gender, contact, email, address, bloodGroup, allergies, medicalHistory) 
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                  [
+                    patient.id,
+                    patient.name,
+                    patient.age,
+                    patient.gender,
+                    patient.contact,
+                    patient.email || "",
+                    patient.address || "",
+                    patient.bloodGroup || "",
+                    patient.allergies || "",
+                    patient.medicalHistory || "",
+                  ],
+                )
+              }
+
+              // Reset the sequence to continue from the highest ID
+              const maxId = Math.max(...patients.map((p: Patient) => p.id || 0))
+              if (maxId > 0) {
+                await db.query(`SELECT setval('patients_id_seq', $1)`, [maxId])
+              }
+
+              console.log("Patients loaded from localStorage successfully")
+              return db
+            }
+          } catch (e) {
+            console.error("Error parsing stored patients:", e)
+            localStorage.removeItem("patients")
+          }
+        }
+      }
+
+      // Only add sample data if no data exists in localStorage
+      await addSampleDataDirect()
 
       console.log("Database initialized successfully")
     } catch (error) {
@@ -62,6 +106,82 @@ export async function initDB() {
     }
   }
   return db
+}
+
+// Add sample data directly to database (used during initialization)
+async function addSampleDataDirect() {
+  if (!db) return
+
+  try {
+    console.log("Adding sample data directly...")
+
+    const samplePatients = [
+      {
+        name: "John Doe",
+        age: 45,
+        gender: "male",
+        contact: "5551234567",
+        email: "john.doe@example.com",
+        address: "123 Main St, Anytown, USA",
+        bloodGroup: "O+",
+        allergies: "Penicillin\nPeanuts",
+        medicalHistory:
+          "Hypertension (diagnosed 2018)\nType 2 Diabetes (diagnosed 2019)\nCholesterol medication: Lipitor 20mg daily",
+      },
+      {
+        name: "Jane Smith",
+        age: 32,
+        gender: "female",
+        contact: "5559876543",
+        email: "jane.smith@example.com",
+        address: "456 Oak Ave, Somewhere, USA",
+        bloodGroup: "A+",
+        allergies: "Sulfa drugs",
+        medicalHistory: "Asthma (childhood)\nMigraine headaches\nAppendectomy (2015)",
+      },
+      {
+        name: "Robert Johnson",
+        age: 58,
+        gender: "male",
+        contact: "5554567890",
+        email: "robert.j@example.com",
+        address: "789 Pine Rd, Elsewhere, USA",
+        bloodGroup: "AB-",
+        allergies: "None",
+        medicalHistory: "Heart surgery - triple bypass (2018)\nArthritis\nHigh blood pressure",
+      },
+    ]
+
+    // Insert sample patients directly into database
+    for (const patient of samplePatients) {
+      console.log("Inserting sample patient with blood group:", patient.bloodGroup)
+      await db.query(
+        `INSERT INTO patients (
+          name, age, gender, contact, email, address, bloodGroup, allergies, medicalHistory
+         ) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          patient.name,
+          patient.age,
+          patient.gender,
+          patient.contact,
+          patient.email,
+          patient.address,
+          patient.bloodGroup,
+          patient.allergies,
+          patient.medicalHistory,
+        ],
+      )
+    }
+
+    // Sync to localStorage after adding sample data
+    await syncToLocalStorage()
+
+    console.log("Sample data added successfully")
+  } catch (error) {
+    console.error("Error adding sample data:", error)
+    throw error
+  }
 }
 
 // Add a new patient
@@ -81,6 +201,19 @@ export async function addPatient(patientData: Patient) {
       medicalHistory = "",
     } = patientData
 
+    console.log("Adding patient with blood group:", bloodGroup)
+    console.log("Full patient data:", {
+      name,
+      age,
+      gender,
+      contact,
+      email,
+      address,
+      bloodGroup,
+      allergies,
+      medicalHistory,
+    })
+
     const result = await db!.query(
       `INSERT INTO patients (
         name, age, gender, contact, email, address, bloodGroup, allergies, medicalHistory
@@ -89,6 +222,9 @@ export async function addPatient(patientData: Patient) {
        RETURNING *`,
       [name, age, gender, contact, email, address, bloodGroup, allergies, medicalHistory],
     )
+
+    // Update localStorage with all current patients
+    await syncToLocalStorage()
 
     return result.rows[0]
   } catch (error) {
@@ -103,6 +239,7 @@ export async function getAllPatients() {
 
   try {
     const result = await db!.query("SELECT * FROM patients ORDER BY id DESC")
+    console.log("Retrieved patients from database:", result.rows)
     return result.rows
   } catch (error) {
     console.error("Error getting patients:", error)
@@ -115,7 +252,6 @@ export async function searchPatients(searchTerm: string) {
   if (!db) await initDB()
 
   try {
-    // Check if searchTerm is a number (potential ID)
     const isNumeric = !isNaN(Number(searchTerm))
 
     let query = `
@@ -158,6 +294,19 @@ export async function updatePatient(id: number, patientData: Patient) {
       medicalHistory = "",
     } = patientData
 
+    console.log("Updating patient with blood group:", bloodGroup)
+    console.log("Full update data:", {
+      name,
+      age,
+      gender,
+      contact,
+      email,
+      address,
+      bloodGroup,
+      allergies,
+      medicalHistory,
+    })
+
     const result = await db!.query(
       `UPDATE patients 
        SET name = $1, age = $2, gender = $3, contact = $4, email = $5, 
@@ -166,6 +315,9 @@ export async function updatePatient(id: number, patientData: Patient) {
        RETURNING *`,
       [name, age, gender, contact, email, address, bloodGroup, allergies, medicalHistory, id],
     )
+
+    // Update localStorage with all current patients
+    await syncToLocalStorage()
 
     return result.rows[0]
   } catch (error) {
@@ -180,6 +332,10 @@ export async function deletePatient(id: number) {
 
   try {
     await db!.query("DELETE FROM patients WHERE id = $1", [id])
+
+    // Update localStorage with all current patients
+    await syncToLocalStorage()
+
     return true
   } catch (error) {
     console.error("Error deleting patient:", error)
@@ -187,60 +343,35 @@ export async function deletePatient(id: number) {
   }
 }
 
-// Add sample data
-async function addSampleData() {
+// Sync current database state to localStorage
+async function syncToLocalStorage() {
+  if (typeof window !== "undefined" && db) {
+    try {
+      const result = await db.query("SELECT * FROM patients ORDER BY id DESC")
+      localStorage.setItem("patients", JSON.stringify(result.rows))
+      console.log("Synced to localStorage:", result.rows.length, "patients")
+    } catch (error) {
+      console.error("Error syncing to localStorage:", error)
+    }
+  }
+}
+
+// Clear all data (useful for testing)
+export async function clearAllData() {
+  if (!db) await initDB()
+
   try {
-    // Check if we already have data
-    const result = await db!.query("SELECT COUNT(*) FROM patients")
-    if (Number.parseInt(result.rows[0].count) > 0) {
-      console.log("Sample data already exists, skipping...")
-      return
+    await db!.query("DELETE FROM patients")
+    await db!.query("ALTER SEQUENCE patients_id_seq RESTART WITH 1")
+
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("patients")
     }
 
-    const samplePatients = [
-      {
-        name: "John Doe",
-        age: 45,
-        gender: "male",
-        contact: "5551234567",
-        email: "john.doe@example.com",
-        address: "123 Main St, Anytown, USA",
-        bloodGroup: "O+",
-        allergies: "Penicillin\nPeanuts",
-        medicalHistory:
-          "Hypertension (diagnosed 2018)\nType 2 Diabetes (diagnosed 2019)\nCholesterol medication: Lipitor 20mg daily",
-      },
-      {
-        name: "Jane Smith",
-        age: 32,
-        gender: "female",
-        contact: "5559876543",
-        email: "jane.smith@example.com",
-        address: "456 Oak Ave, Somewhere, USA",
-        bloodGroup: "A+",
-        allergies: "Sulfa drugs",
-        medicalHistory: "Asthma (childhood)\nMigraine headaches\nAppendectomy (2015)",
-      },
-      {
-        name: "Robert Johnson",
-        age: 58,
-        gender: "male",
-        contact: "5554567890",
-        email: "robert.j@example.com",
-        address: "789 Pine Rd, Elsewhere, USA",
-        bloodGroup: "AB-",
-        allergies: "None",
-        medicalHistory: "Heart surgery - triple bypass (2018)\nArthritis\nHigh blood pressure",
-      },
-    ]
-
-    for (const patient of samplePatients) {
-      await addPatient(patient)
-    }
-
-    console.log("Sample data added successfully")
+    console.log("All data cleared successfully")
+    return true
   } catch (error) {
-    console.error("Error adding sample data:", error)
+    console.error("Error clearing data:", error)
     throw error
   }
 }

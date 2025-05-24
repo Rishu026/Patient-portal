@@ -95,7 +95,7 @@ export function PatientList({ patients, onUpdate }: PatientListProps) {
                       <TableCell className="capitalize">{patient.gender}</TableCell>
                       <TableCell>{patient.contact}</TableCell>
                       <TableCell>
-                        {patient.bloodGroup ? (
+                        {patient.bloodGroup && patient.bloodGroup.trim() !== "" ? (
                           <Badge variant="outline">{patient.bloodGroup}</Badge>
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>

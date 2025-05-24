@@ -48,7 +48,11 @@ export function PatientView({ patient }: PatientViewProps) {
           <div>
             <h3 className="text-sm font-medium text-muted-foreground">Blood Group</h3>
             <p className="text-base">
-              {patient.bloodGroup ? <Badge variant="outline">{patient.bloodGroup}</Badge> : "Not provided"}
+              {patient.bloodGroup && patient.bloodGroup.trim() !== "" ? (
+                <Badge variant="outline">{patient.bloodGroup}</Badge>
+              ) : (
+                "Not provided"
+              )}
             </p>
           </div>
         </div>

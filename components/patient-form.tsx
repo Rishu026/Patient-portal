@@ -49,6 +49,7 @@ export function PatientForm({ onSubmit, initialData }: PatientFormProps) {
   }
 
   const handleSelectChange = (value: string, name: string) => {
+    console.log(`Setting ${name} to:`, value) // Add debug logging
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
@@ -74,6 +75,7 @@ export function PatientForm({ onSubmit, initialData }: PatientFormProps) {
         ...formData,
         contact: formData.contact.replace(/[^0-9]/g, ""),
       }
+      console.log("Submitting patient data:", formattedData) // Add debug logging
       onSubmit(formattedData)
     }
   }
