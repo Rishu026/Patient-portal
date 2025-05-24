@@ -2,7 +2,8 @@
 
 A frontend-only patient registration application built with Next.js and PGlite for in-browser SQL database functionality. This application allows healthcare providers to manage patient records without requiring a backend server.
 
-## Demo for the project: [https://patient-portal-livid.vercel.app/](https://patient-portal-livid.vercel.app/)
+## Deployment for the project: [https://patient-portal-livid.vercel.app/](https://patient-portal-livid.vercel.app/)
+## Demo : [https://www.loom.com/share/0bda41cd828f4ce1bd0a8107b8ba3257?sid=ae18ee81-fdd4-4bbc-a02a-9dfaebb89f1f](https://www.loom.com/share/0bda41cd828f4ce1bd0a8107b8ba3257?sid=ae18ee81-fdd4-4bbc-a02a-9dfaebb89f1f)
 
 
 
